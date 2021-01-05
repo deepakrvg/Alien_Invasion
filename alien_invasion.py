@@ -1,7 +1,10 @@
 import sys
+from time import sleep
 import pygame
 
 from settings import Settings
+from game_stats import GameStats
+from button import Button
 from ship import Ship
 from bullet import Bullet
 from alien import Alien
@@ -19,19 +22,28 @@ class AlienInavsion:
         self.settings.screen_height = self.screen.get_rect().height
         pygame.display.set_caption("Alien Invasion")
 
+        # create an instance to store game statistics
+        self.stats = GameStats(self)
+
         self.ship = Ship(self)
         self.bullets = pygame.sprite.Group()
         self.aliens = pygame.sprite.Group()
 
         self._create_fleet()
 
+        # make the play button
+        self.play_button = Button(self, "Play")
+
     def run_game(self):
         """start the main loop for the game."""
         while True:
             self._check_events()
-            self.ship.update()
-            self._update_bullets()
-            self._update_aliens()
+
+            if self.stats.game_active:
+                self.ship.update()
+                self._update_bullets()
+                self._update_aliens()
+
             self._update_screen()
 
     def _check_events(self):
@@ -43,6 +55,14 @@ class AlienInavsion:
                 self._check_keydown_events(event)
             elif event.type == pygame.KEYUP:
                 self._check_keyup_events(event)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                self._check_play_button(mouse_pos)
+
+    def _check_play_button(self, mouse_pos):
+        """Start a new game when th eplayer clicks Play."""
+        if self.play_button.rect.collidepoint(mouse_pos):
+            self.stats.game_active = True
 
     def _check_keydown_events(self, event):
         """Respond to key presses"""
@@ -62,6 +82,34 @@ class AlienInavsion:
         elif event.key == pygame.K_LEFT:
             self.ship.moving_left = False
 
+    def _ship_hit(self):
+        """Respond to the ship being hit by an alien."""
+        if self.stats.ship_left > 0:
+            # Decrement ships left
+            self.stats.ship_left -= 1
+
+            #get rid of any reamining aliens and bullets
+            self.aliens.empty()
+            self.bullets.empty()
+
+            # create a new fleet and center the ship
+            self._create_fleet()
+            self.ship.center_ship()
+
+            #pause
+            sleep(0.5)
+        else:
+            self.stats.game_active = False
+
+    def _check_aliens_bottom(self):
+        """check if any aliens have reached the bottom of the screen"""
+        screen_rect = self.screen.get_rect()
+        for alien in self.aliens.sprites():
+            if alien.rect.bottom >= screen_rect.bottom:
+                # Treat this the same as if the ship got hit
+                self._ship_hit()
+                break
+
     def _fire_bullet(self):
         """create a new bullet and add it to the bullets group"""
         if len(self.bullets) < self.settings.bullets_allowed:
@@ -78,11 +126,29 @@ class AlienInavsion:
             if bullet.rect.bottom <= 0:
                 self.bullets.remove(bullet)
 
+        self._check_bullet_alien_collisions()
+
+    def _check_bullet_alien_collisions(self):
+        # Check for any bullets that have hit aliens.
+        # If so, get rid of the bullet and the alien.
+        collisions = pygame.sprite.groupcollide(self.bullets, self.aliens, True, True)
+        if not self.aliens:
+            # Destory existing bullets and create new fleet
+            self.bullets.empty()
+            self._create_fleet()
+
     def _update_aliens(self):
         # check if the fleet is at an edge
         # then update the position of all the aliens in the fleet
         self._check_fleet_edges()
         self.aliens.update()
+
+        # Look for alien-ship collisions
+        if pygame.sprite.spritecollideany(self.ship, self.aliens):
+            self._ship_hit()
+
+        # Look for aliens hitting the bottom of the screen
+        self._check_aliens_bottom()
 
     def _create_fleet(self):
         """Create the fleet of aliens."""
@@ -133,6 +199,10 @@ class AlienInavsion:
         for bullet in self.bullets.sprites():
             bullet.draw_bullet()
         self.aliens.draw(self.screen)
+
+        # draw the play button if the game is inactive
+        if not self.stats.game_active:
+            self.play_button._draw_button()
 
         # Make the most recently drawn screen visible.
         pygame.display.flip()
