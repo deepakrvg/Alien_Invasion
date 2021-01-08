@@ -72,6 +72,8 @@ class AlienInavsion:
             self.stats.reset_stats()
             self.stats.game_active = True
             self.sb.prep_score()
+            self.sb.prep_level()
+            self.sb.prep_ships()
 
             # Get rid of any remaining aliens and bullets
             self.aliens.empty()
@@ -105,8 +107,9 @@ class AlienInavsion:
     def _ship_hit(self):
         """Respond to the ship being hit by an alien."""
         if self.stats.ship_left > 0:
-            # Decrement ships left
+            # Decrement ships left, and update scoreboard
             self.stats.ship_left -= 1
+            self.sb.prep_ships()
 
             #get rid of any reamining aliens and bullets
             self.aliens.empty()
@@ -165,6 +168,10 @@ class AlienInavsion:
             self.bullets.empty()
             self._create_fleet()
             self.settings.increase_speed()
+
+            # Increase level
+            self.stats.level += 1
+            self.sb.prep_level()
 
     def _update_aliens(self):
         # check if the fleet is at an edge
